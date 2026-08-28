@@ -3,4 +3,4 @@
 *.db
 # Dependencies that can be ignored
 .env
-requirements.txt
+
