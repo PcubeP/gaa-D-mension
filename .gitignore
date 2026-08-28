@@ -1,0 +1,6 @@
+# Python virtual environment - do not commit
+# Database file (will be regenerated/seeded)
+*.db
+# Dependencies that can be ignored
+.env
+requirements.txt

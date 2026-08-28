@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Indian Car Visual Comparator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; color: #1e293b; line-height: 1.5; }
+    
+    .header { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: white; padding: 1rem; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+    .header h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
+    .header p { font-size: 0.875rem; opacity: 0.9; max-width: 540px; margin: 0 auto; }
+    
+    .container { display: grid; gap: 1rem; padding: 1rem; max-width: 1200px; margin: 0 auto; }
+    
+    /* Search bar */
+    .search-bar { display: flex; gap: 0.5rem; align-items: center; background: white; padding: 0.75rem; border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+    .search-bar input { flex: 1; min-width: 200px; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 1rem; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+    .search-bar input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+    .search-bar button { padding: 0.5rem 1rem; background: #2563eb; color: white; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; transition: background 0.2s, transform 0.1s; }
+    .search-bar button:hover { background: #1d4ed8; transform: translateY(-1px); }
+    
+    // Clear button for search - explicitly clears results
+    const clearBtn = document.querySelector('.search-bar button');
+    clearBtn.addEventListener('click', () => {
+      document.getElementById('searchInput').value = '';
+      filterCars();
+    });
+
+    /* Car results grid */
+    .car-grid { display: grid; gap: 1rem; }
+    .car-card { background: white; border-radius: 12px; padding: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); transition: transform 0.2s, box-shadow 0.2s; cursor: pointer; border: 2px solid transparent; }
+    .car-card:hover { transform: translateY(-3px); box-shadow: 0 8px 16px rgba(0,0,0,0.15); border-color: #3b82f6; }
+    .car-card.selected { border-color: #1d4ed8; background: #eff6ff; }
+    .car-card h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; color: #1e293b; }
+    .car-card p { font-size: 0.875rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 140px); }
+    .car-card span { display: inline-block; background: #e2e8f0; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; color: #475569; margin-left: 0.5rem; }
+    .car-card .dimensions { display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap; }
+    .dim-badge { background: #f1f5f9; padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.8rem; color: #334155; display: flex; gap: 0.5rem; align-items: center; }
+    .dim-badge::before { content: ''; width: 3px; height: 3px; background: #94a3b8; border-radius: 50%; }
+    
+    /* Comparison view */
+    .comparison-view { display: none; padding: 1rem; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .comparison-view.active { display: block; animation: slideIn 0.3s ease-out; }
+    
+    @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    
+    .comparison-toolbar { display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
+    .comparison-toolbar label { font-weight: 500; color: #475569; }
+    .comparison-toolbar select, .comparison-toolbar input[type="range"] { padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 6px; background: white; font-size: 1rem; outline: none; }
+    .comparison-toolbar button { padding: 0.5rem 1rem; border: none; border-radius: 6px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+    .btn-primary { background: #2563eb; color: white; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-secondary { background: #e2e8f0; color: #475569; }
+    .btn-secondary:hover { background: #cbd5e1; }
+    
+    /* Canvas container */
+    .canvas-container { position: relative; margin-bottom: 1rem; border-radius: 8px; overflow: hidden; background: #f8fafc; border: 2px solid #e2e8f0; }
+    canvas { display: block; max-width: 100%; height: auto; }
+    
+    /* Results panel */
+    .results-panel { margin-top: 1rem; padding: 1rem; background: #f8fafc; border-radius: 8px; }
+    .results-panel h3 { font-size: 1rem; margin-bottom: 0.5rem; color: #475569; }
+    .result-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e2e8f0; font-size: 0.875rem; }
+    .result-row:last-child { border-bottom: none; }
+    .diff-positive { color: #16a34a; font-weight: 500; }
+    .diff-negative { color: #dc2626; font-weight: 500; }
+    
+    /* Modal */
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; }
+    .modal.active { display: flex; }
+    .modal-content { background: white; padding: 2rem; border-radius: 12px; max-width: 600px; width: 90%; max-height: 90vh; overflow-y: auto; position: relative; animation: fadeIn 0.2s; }
+    .modal-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b; }
+    
+    @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    
+    .empty-state { text-align: center; padding: 3rem; color: #64748b; }
+    .empty-state svg { width: 64px; height: 64px; margin-bottom: 1rem; opacity: 0.5; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <h1>🚗 Indian Car Visual Comparator</h1>
+    <p>Compare car dimensions side-by-side to see the real size differences!</p>
+  </header>
+  
+  <div class="container">
+    <section class="search-bar">
+      <input type="text" id="searchInput" placeholder="Search by make/model...">
+      <button onclick="clearBtn.click()">Search</button>
+    </section>
+
+    <div id="resultsArea" style="margin-top: 1rem;">
+      <!-- Car grid or comparison view will be rendered here -->
+    </div>
+  </div>
+
+  <!-- Comparison View Modal -->
+  <div class="modal" id="comparisonModal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+      <h2 style="margin-bottom: 1rem;">Side-by-Side Comparison</h2>
+      
+      <div class="comparison-toolbar">
+        <label>Car A:</label>
+        <select id="carASelect"></select>
+
+        <label>Car B:</label>
+        <select id="carBSelect"></select>
+        
+        <label>Mode:</label>
+        <select id="compareMode">
+          <option value="overlay">Overlay (Transparent)</option>
+          <option value="sideside">Side-by-Side</option>
+        </select>
+      
+        <label>Transparency:</label>
+        <input type="range" id="transparencySlider" min="50" max="100" value="70" oninput="updateCanvas()">
+        
+        <button class="btn-primary" onclick="loadComparison()">Compare</button>
+        <button class="btn-secondary" onclick="randomCars()">Random Cars</button>
+      </div>
+
+      <div class="canvas-container">
+        <canvas id="compareCanvas"></canvas>
+      </div>
+
+      <div id="resultsPanel" style="display: none;" class="results-panel">
+        <h3>Dimension Comparison</h3>
+        <div id="comparisonResults"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:8002' : '';
+    let allCars = [];
+    let currentComparison = null;
+
+    const carLabel = car => `${car.make} ${car.model} (${car.year})`;
+
+    // Search debounce implementation
+    let searchTimeout = null;
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      if (searchTimeout) clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        filterCars();
+      }, 250);
+    });
+
+    // Clear button for search - explicitly clears results
+    const clearBtn = document.querySelector('.search-bar button');
+    clearBtn.addEventListener('click', () => {
+      document.getElementById('searchInput').value = '';
+      filterCars();
+    });
+
+    async function fetchAllCars() {
+      const response = await fetch(`${API_BASE}/cars`);
+      if (!response.ok) throw new Error('Failed to fetch cars');
+      return response.json();
+    }
+
+    function renderCarGrid(carList) {
+      const resultsArea = document.getElementById('resultsArea');
+      resultsArea.innerHTML = '';
+      if (!carList.length) {
+        resultsArea.innerHTML = '<div class="empty-state"><p>No cars found matching your search.</p></div>';
+        return;
+      }
+      carList.forEach(car => {
+        const card = document.createElement('article');
+        card.className = 'car-card';
+        card.innerHTML = `<h3>${carLabel(car)}</h3><div class="dimensions">
+          <span class="dim-badge">L: ${car.length}mm</span>
+          <span class="dim-badge">W: ${car.width}mm</span>
+          <span class="dim-badge">H: ${car.height}mm</span></div>`;
+        card.addEventListener('click', () => openComparison(car.id));
+        resultsArea.appendChild(card);
+      });
+    }
+
+    function renderSelects() {
+      ['carASelect', 'carBSelect'].forEach(id => {
+        const select = document.getElementById(id);
+        select.innerHTML = allCars.map(car => `<option value="${car.id}">${carLabel(car)}</option>`).join('');
+      });
+      if (allCars.length > 1) document.getElementById('carBSelect').selectedIndex = 1;
+    }
+
+    function filterCars() {
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+      renderCarGrid(allCars.filter(car => carLabel(car).toLowerCase().includes(query)));
+    }
+
+    function openComparison(carAId) {
+      renderSelects();
+      document.getElementById('carASelect').value = carAId;
+      document.getElementById('comparisonModal').classList.add('active');
+      loadComparison();
+    }
+
+    function closeModal() {
+      document.getElementById('comparisonModal').classList.remove('active');
+    }
+
+    function randomCars() {
+      const first = Math.floor(Math.random() * allCars.length);
+      let second = Math.floor(Math.random() * allCars.length);
+      while (second === first) second = Math.floor(Math.random() * allCars.length);
+      document.getElementById('carASelect').selectedIndex = first;
+      document.getElementById('carBSelect').selectedIndex = second;
+      loadComparison();
+    }
+
+    function parseSVG(svgString) {
+      const doc = new DOMParser().parseFromString(svgString, 'image/svg+xml');
+      const svg = doc.documentElement;
+      const viewBox = (svg.getAttribute('viewBox') || '0 0 512 256').split(/\s+/).map(Number);
+      const paths = [...doc.querySelectorAll('path')].map(path => {
+        const points = [...(path.getAttribute('d') || '').matchAll(/[ML]\s*([\d.-]+),([\d.-]+)/g)]
+          .map(match => ({ x: Number(match[1]), y: Number(match[2]) }));
+        return points;
+      }).filter(points => points.length > 1);
+      return { width: viewBox[2], height: viewBox[3], paths };
+    }
+
+    function drawCar(ctx, data, x, baseline, scale, color, alpha) {
+      data.paths.forEach(points => {
+        ctx.beginPath();
+        points.forEach((point, index) => {
+          const px = x + point.x * scale;
+          const py = baseline - (data.height - point.y) * scale;
+          if (index === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        });
+        ctx.closePath();
+        ctx.fillStyle = `rgba(${color}, ${alpha})`;
+        ctx.fill();
+        ctx.strokeStyle = `rgb(${color})`;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      });
+    }
+
+    function renderResults(carA, carB) {
+      const metrics = [['Length', 'length'], ['Width', 'width'], ['Height', 'height'], ['Wheelbase', 'wheelbase']];
+      document.getElementById('resultsPanel').style.display = 'block';
+      
+      // Add side labels showing absolute dimensions for each car
+      let html = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">';
+      html += `<div style="border-right: 2px solid #e2e8f0; padding-right: 1rem;"><h4 style="margin-bottom: 0.5rem; color: #64748b;">${carLabel(carA)}</h4>`;
+      metrics.forEach(([label, key]) => {
+        const delta = Math.abs(carA[key] - carB[key]);
+        html += `<div class="result-row"><span>${label}</span><strong>${carA[key]}mm vs ${carB[key]}mm (Δ ${delta}mm)</strong></div>`;
+      });
+      html += '</div>';
+      
+      html += `<div><h4 style="margin-bottom: 0.5rem; color: #64748b;">Comparison Stats</h4>`;
+      html += metrics.map(([label, key]) => {
+        const delta = Math.abs(carA[key] - carB[key]);
+        return `<div class="result-row"><span>${label}</span><strong class="${delta <= 50 ? 'diff-positive' : 'diff-negative'}">Δ ${delta}mm</strong></div>`;
+      }).join('');
+      html += '</div>';
+      
+      html += '</div>';
+      document.getElementById('comparisonResults').innerHTML = html;
+    }
+
+    async function loadComparison() {
+      const carA = allCars.find(car => car.id === Number(document.getElementById('carASelect').value));
+      const carB = allCars.find(car => car.id === Number(document.getElementById('carBSelect').value));
+      if (!carA || !carB) return;
+      const [responseA, responseB] = await Promise.all([fetch(`${API_BASE}/svg/${carA.id}`), fetch(`${API_BASE}/svg/${carB.id}`)]);
+      const [svgA, svgB] = await Promise.all([responseA.json(), responseB.json()]);
+      currentComparison = { carA, carB, dataA: parseSVG(svgA.svg), dataB: parseSVG(svgB.svg) };
+      updateCanvas();
+      renderResults(carA, carB);
+    }
+
+    function updateCanvas() {
+      if (!currentComparison) return;
+      const canvas = document.getElementById('compareCanvas');
+      const ctx = canvas.getContext('2d');
+      const { carA, carB, dataA, dataB } = currentComparison;
+      const mode = document.getElementById('compareMode').value;
+      const alpha = Number(document.getElementById('transparencySlider').value) / 100;
+      canvas.width = Math.min(1100, Math.max(640, canvas.parentElement.clientWidth));
+      canvas.height = 360;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const scale = Math.min((canvas.width - 80) / (mode === 'overlay' ? Math.max(dataA.width, dataB.width) : dataA.width + dataB.width + 40), 0.16);
+      const baseline = canvas.height - 50;
+      drawCar(ctx, dataA, 30, baseline, scale, '14, 116, 144', 0.75);
+      drawCar(ctx, dataB, mode === 'overlay' ? 30 : 40 + dataA.width * scale, baseline, scale, '194, 65, 12', mode === 'overlay' ? 1 - alpha : 0.75);
+    }
+
+    async function init() {
+      try {
+        allCars = await fetchAllCars();
+        renderCarGrid(allCars);
+        renderSelects();
+      } catch (error) {
+        document.getElementById('resultsArea').innerHTML = '<div class="empty-state"><p>Unable to load cars. Check that the API is running.</p></div>';
+        console.error(error);
+      }
+    }
+
+    // Search debounce implementation
+    let searchTimeout = null;
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      if (searchTimeout) clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        filterCars();
+      }, 250);
+    });
+
+    // Close button now clears results and resets dropdowns
+    document.querySelector('.modal-close').addEventListener('click', () => {
+      closeModal();
+      resetComparisonUI();
+    });
+
+    // Wire close modal backdrop click to also clear previous selections
+    document.getElementById('comparisonModal').addEventListener('click', event => {
+      if (event.target.id === 'comparisonModal') {
+        closeModal();
+        resetComparisonUI();
+      }
+    });
+
+    // Clear button for search - explicitly clears results
+    const clearBtn = document.querySelector('.search-bar button');
+    clearBtn.addEventListener('click', () => {
+      document.getElementById('searchInput').value = '';
+      filterCars();
+    });
+
+    // Clear function called when modal closes or compare is run again
+    function resetComparisonUI() {
+      allCars = [];
+      currentComparison = null;
+      ['carASelect', 'carBSelect'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = '';
+      });
+      document.getElementById('resultsPanel').style.display = 'none';
+      clearBtn.textContent = 'Search';
+    }
+
+    document.getElementById('compareMode').addEventListener('change', updateCanvas);
+    document.getElementById('transparencySlider').addEventListener('input', updateCanvas);
+    window.addEventListener('resize', updateCanvas);
+    init();
+  </script>
+</body>
+</html>
